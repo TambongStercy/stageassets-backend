@@ -123,6 +123,25 @@ export class EmailsService {
     return this.sendEmail(userEmail, subject, html);
   }
 
+  async sendEmailChangeVerification(
+    newEmail: string,
+    userName: string,
+    verificationUrl: string,
+  ) {
+    const subject = 'Verify Your New Email Address - StageAsset';
+    const html = `
+      <h2>Hi ${userName},</h2>
+      <p>You requested to change your email address for your StageAsset account.</p>
+      <p>Please verify your new email address by clicking the button below:</p>
+      <p><a href="${verificationUrl}" style="background-color: #3B82F6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Verify New Email</a></p>
+      <p>This link will expire in 1 hour.</p>
+      <p>If you didn't request this change, please contact support immediately.</p>
+      <p>Best regards,<br>The StageAsset Team</p>
+    `;
+
+    return this.sendEmail(newEmail, subject, html);
+  }
+
   /**
    * Unified email sending method that switches between Gmail and SendGrid
    * based on NODE_ENV

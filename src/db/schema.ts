@@ -150,7 +150,8 @@ export const users = pgTable('users', {
   password: text('password'),
   firstName: varchar('first_name', { length: 100 }),
   lastName: varchar('last_name', { length: 100 }),
-  
+  avatarUrl: text('avatar_url'),
+
   // OAuth
   googleId: varchar('google_id', { length: 255 }).unique(),
   
@@ -167,6 +168,14 @@ export const users = pgTable('users', {
   isActive: boolean('is_active').default(true).notNull(),
   isEmailVerified: boolean('is_email_verified').default(false).notNull(),
   emailVerificationToken: varchar('email_verification_token', { length: 255 }),
+  emailVerificationExpires: timestamp('email_verification_expires'),
+
+  // Email change flow
+  pendingEmail: varchar('pending_email', { length: 255 }),
+  emailChangeToken: varchar('email_change_token', { length: 255 }),
+  emailChangeExpires: timestamp('email_change_expires'),
+
+  // Password reset
   passwordResetToken: varchar('password_reset_token', { length: 255 }),
   passwordResetExpires: timestamp('password_reset_expires'),
   

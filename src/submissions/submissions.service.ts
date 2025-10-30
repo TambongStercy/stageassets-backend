@@ -69,7 +69,82 @@ export class SubmissionsService {
 
     const submission = result[0];
 
+    // Update speaker's submission status
+    await this.updateSpeakerSubmissionStatus(speakerId);
+
     return submission;
+  }
+
+  /**
+   * Update speaker's submission status based on their submissions
+   */
+  private async updateSpeakerSubmissionStatus(speakerId: number) {
+    // Get the speaker
+    const [speaker] = await this.db
+      .select()
+      .from(schema.speakers)
+      .where(eq(schema.speakers.id, speakerId))
+      .limit(1);
+
+    if (!speaker) {
+      return;
+    }
+
+    // Get all asset requirements for the event
+    const assetRequirements = await this.db
+      .select()
+      .from(schema.assetRequirements)
+      .where(eq(schema.assetRequirements.eventId, speaker.eventId));
+
+    // Get all required asset requirements
+    const requiredAssets = assetRequirements.filter((ar) => ar.isRequired);
+
+    // Get speaker's latest submissions
+    const submissions = await this.db
+      .select()
+      .from(schema.submissions)
+      .where(
+        and(
+          eq(schema.submissions.speakerId, speakerId),
+          eq(schema.submissions.isLatest, true),
+        ),
+      );
+
+    // Calculate submission status
+    let newStatus: 'pending' | 'partial' | 'complete';
+
+    if (submissions.length === 0) {
+      newStatus = 'pending';
+    } else if (requiredAssets.length === 0) {
+      // If no required assets, any submission means complete
+      newStatus = 'complete';
+    } else {
+      // Check if all required assets are submitted
+      const submittedRequirementIds = submissions.map(
+        (s) => s.assetRequirementId,
+      );
+      const requiredAssetIds = requiredAssets.map((ra) => ra.id);
+
+      const allRequiredSubmitted = requiredAssetIds.every((id) =>
+        submittedRequirementIds.includes(id),
+      );
+
+      if (allRequiredSubmitted) {
+        newStatus = 'complete';
+      } else {
+        newStatus = 'partial';
+      }
+    }
+
+    // Update speaker's submission status
+    await this.db
+      .update(schema.speakers)
+      .set({
+        submissionStatus: newStatus,
+        submittedAt: newStatus === 'complete' ? new Date() : speaker.submittedAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.speakers.id, speakerId));
   }
 
   async findBySpeaker(speakerId: number) {
@@ -122,9 +197,26 @@ export class SubmissionsService {
   }
 
   async delete(submissionId: number) {
+    // Get the submission to find the speaker
+    const [submission] = await this.db
+      .select()
+      .from(schema.submissions)
+      .where(eq(schema.submissions.id, submissionId))
+      .limit(1);
+
+    if (!submission) {
+      throw new NotFoundException('Submission not found');
+    }
+
+    const speakerId = submission.speakerId;
+
+    // Delete the submission
     await this.db
       .delete(schema.submissions)
       .where(eq(schema.submissions.id, submissionId));
+
+    // Update speaker's submission status
+    await this.updateSpeakerSubmissionStatus(speakerId);
 
     return { message: 'Submission deleted successfully' };
   }

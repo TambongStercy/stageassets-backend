@@ -17,7 +17,8 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "migrate:fix-speaker-status": "ts-node -r tsconfig-paths/register scripts/fix-speaker-statuses.ts"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.17.2",
@@ -33,6 +34,7 @@
     "@sendgrid/mail": "^8.1.6",
     "@types/nodemailer": "^7.0.3",
     "@types/passport-google-oauth20": "^2.0.17",
+    "archiver": "^7.0.1",
     "bcrypt": "^6.0.0",
     "bull": "^4.16.5",
     "class-transformer": "^0.5.1",
@@ -57,6 +59,7 @@
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.1",
+    "@types/archiver": "^7.0.0",
     "@types/bcrypt": "^6.0.0",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",

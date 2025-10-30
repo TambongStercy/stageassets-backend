@@ -165,42 +165,79 @@ export class AuthService {
   }
 
   async googleLogin(googleUser: any) {
-    const { email, firstName, lastName } = googleUser;
+    const { googleId, email, firstName, lastName, picture } = googleUser;
 
-    // Check if user exists
+    // Check if user exists by googleId first
     let [user] = await this.db
       .select()
       .from(schema.users)
-      .where(eq(schema.users.email, email))
+      .where(eq(schema.users.googleId, googleId))
       .limit(1);
+
+    if (!user) {
+      // Check by email in case user registered with email/password first
+      [user] = await this.db
+        .select()
+        .from(schema.users)
+        .where(eq(schema.users.email, email))
+        .limit(1);
+    }
 
     if (!user) {
       // Create new user for Google OAuth (no password needed)
       const result = await this.db
         .insert(schema.users)
         .values({
+          googleId,
           email,
           password: null, // Google OAuth users don't have passwords
           firstName,
           lastName,
+          avatarUrl: picture || null,
           isActive: true,
           isEmailVerified: true, // Google emails are already verified
         })
         .returning();
 
       user = result[0];
+    } else {
+      // Update existing user with Google ID and avatar if not already set
+      const updateData: any = {
+        lastLoginAt: new Date(),
+      };
+
+      // Link Google account if not already linked
+      if (!user.googleId) {
+        updateData.googleId = googleId;
+      }
+
+      // Update avatar if available and not already set
+      if (picture && !user.avatarUrl) {
+        updateData.avatarUrl = picture;
+      }
+
+      // Update email verification if logging in with Google
+      if (!user.isEmailVerified) {
+        updateData.isEmailVerified = true;
+      }
+
+      await this.db
+        .update(schema.users)
+        .set(updateData)
+        .where(eq(schema.users.id, user.id));
+
+      // Refresh user data after update
+      [user] = await this.db
+        .select()
+        .from(schema.users)
+        .where(eq(schema.users.id, user.id))
+        .limit(1);
     }
 
     // Check if user is active
     if (!user.isActive) {
       throw new UnauthorizedException('Account is deactivated');
     }
-
-    // Update last login
-    await this.db
-      .update(schema.users)
-      .set({ lastLoginAt: new Date() })
-      .where(eq(schema.users.id, user.id));
 
     // Generate JWT token
     const token = this.generateToken(user);
@@ -211,6 +248,7 @@ export class AuthService {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        avatarUrl: user.avatarUrl,
       },
       token,
     };

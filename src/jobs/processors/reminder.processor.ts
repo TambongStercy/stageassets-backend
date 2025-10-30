@@ -47,30 +47,70 @@ export class ReminderProcessor {
         return { message: 'Event not found' };
       }
 
-      // Send reminder email
-      const portalUrl = `${process.env.FRONTEND_URL}/portal/speakers/${speaker.accessToken}`;
+      // Generate portal URL and email content
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const portalUrl = `${frontendUrl}/portal/speakers/${speaker.accessToken}`;
       const speakerName = speaker.firstName
         ? `${speaker.firstName} ${speaker.lastName || ''}`
         : speaker.email;
 
-      await this.emailsService.sendReminder(
-        speaker.email,
-        speakerName,
-        event.name,
-        event.deadline,
-        portalUrl,
-      );
+      const emailSubject = `Reminder: Submit your assets for ${event.name}`;
+      const emailBodyText = `Hi ${speakerName},\n\nThis is a friendly reminder to submit your speaker assets for ${event.name}.\n\nDeadline: ${event.deadline.toLocaleDateString()}\n\nAccess your submission portal here:\n${portalUrl}\n\nDon't miss the deadline!\n\nBest regards,\nThe StageAsset Team`;
 
-      // Update speaker reminder count
-      await this.db
-        .update(schema.speakers)
-        .set({
-          lastReminderSentAt: new Date(),
-          reminderCount: speaker.reminderCount + 1,
+      // Create reminder record in database
+      const [reminderRecord] = await this.db
+        .insert(schema.reminders)
+        .values({
+          speakerId,
+          eventId,
+          status: 'pending',
+          scheduledFor: new Date(),
+          emailSubject,
+          emailBody: emailBodyText,
         })
-        .where(eq(schema.speakers.id, speakerId));
+        .returning();
 
-      return { message: 'Reminder sent successfully' };
+      try {
+        // Send reminder email
+        await this.emailsService.sendReminder(
+          speaker.email,
+          speakerName,
+          event.name,
+          event.deadline,
+          portalUrl,
+        );
+
+        // Mark reminder as sent
+        await this.db
+          .update(schema.reminders)
+          .set({
+            status: 'sent',
+            sentAt: new Date(),
+          })
+          .where(eq(schema.reminders.id, reminderRecord.id));
+
+        // Update speaker reminder count
+        await this.db
+          .update(schema.speakers)
+          .set({
+            lastReminderSentAt: new Date(),
+            reminderCount: speaker.reminderCount + 1,
+          })
+          .where(eq(schema.speakers.id, speakerId));
+
+        return { message: 'Reminder sent successfully' };
+      } catch (emailError) {
+        // Mark reminder as failed if email sending fails
+        await this.db
+          .update(schema.reminders)
+          .set({
+            status: 'failed',
+            errorMessage: emailError.message || 'Failed to send email',
+          })
+          .where(eq(schema.reminders.id, reminderRecord.id));
+
+        throw emailError;
+      }
     } catch (error) {
       console.error('Error processing reminder job:', error);
       throw error;

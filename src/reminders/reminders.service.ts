@@ -10,12 +10,14 @@ import { eq, and, desc, SQL } from 'drizzle-orm';
 import * as schema from '../db/schema';
 import { DATABASE_CONNECTION } from '../db/database.providers';
 import { TriggerReminderDto } from './dto/trigger-reminder.dto';
+import { EmailsService } from '../emails/emails.service';
 
 @Injectable()
 export class RemindersService {
   constructor(
     @Inject(DATABASE_CONNECTION)
     private db: NodePgDatabase<typeof schema>,
+    private emailsService: EmailsService,
   ) {}
 
   /**
@@ -201,6 +203,10 @@ export class RemindersService {
       throw new ForbiddenException('You do not have access to this speaker');
     }
 
+    // Generate portal URL for the speaker
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const portalUrl = `${frontendUrl}/portal/speakers/${speaker.accessToken}`;
+
     // Create a reminder record
     const result = await this.db
       .insert(schema.reminders)
@@ -213,38 +219,63 @@ export class RemindersService {
           emailSubject || `Reminder: Submit your assets for ${event.name}`,
         emailBody:
           emailBody ||
-          `Hi ${speaker.firstName || 'there'},\n\nThis is a reminder to submit your assets for the event "${event.name}".\n\nPlease visit your portal to complete your submission.\n\nThank you!`,
+          `Hi ${speaker.firstName || 'there'},\n\nThis is a reminder to submit your assets for the event "${event.name}".\n\nDeadline: ${event.deadline.toLocaleDateString()}\n\nAccess your submission portal here:\n${portalUrl}\n\nDon't miss the deadline!\n\nBest regards,\nThe StageAsset Team`,
       })
       .returning();
 
     const reminder = result[0];
 
-    // In a real implementation, this would trigger the email service
-    // For now, we'll just mark it as sent
-    const updateResult = await this.db
-      .update(schema.reminders)
-      .set({
-        status: 'sent',
-        sentAt: new Date(),
-      })
-      .where(eq(schema.reminders.id, reminder.id))
-      .returning();
+    try {
+      // Actually send the email
+      const speakerName = speaker.firstName
+        ? `${speaker.firstName} ${speaker.lastName || ''}`.trim()
+        : 'there';
 
-    const sentReminder = updateResult[0];
+      await this.emailsService.sendReminder(
+        speaker.email,
+        speakerName,
+        event.name,
+        event.deadline,
+        portalUrl,
+      );
 
-    // Update speaker's reminder count and last sent timestamp
-    await this.db
-      .update(schema.speakers)
-      .set({
-        reminderCount: speaker.reminderCount + 1,
-        lastReminderSentAt: new Date(),
-      })
-      .where(eq(schema.speakers.id, speakerId));
+      // Mark reminder as sent
+      const updateResult = await this.db
+        .update(schema.reminders)
+        .set({
+          status: 'sent',
+          sentAt: new Date(),
+        })
+        .where(eq(schema.reminders.id, reminder.id))
+        .returning();
 
-    return {
-      message: 'Reminder triggered successfully',
-      reminder: sentReminder,
-    };
+      const sentReminder = updateResult[0];
+
+      // Update speaker's reminder count and last sent timestamp
+      await this.db
+        .update(schema.speakers)
+        .set({
+          reminderCount: speaker.reminderCount + 1,
+          lastReminderSentAt: new Date(),
+        })
+        .where(eq(schema.speakers.id, speakerId));
+
+      return {
+        message: 'Reminder sent successfully',
+        reminder: sentReminder,
+      };
+    } catch (emailError) {
+      // Mark reminder as failed if email sending fails
+      await this.db
+        .update(schema.reminders)
+        .set({
+          status: 'failed',
+          errorMessage: emailError.message || 'Failed to send email',
+        })
+        .where(eq(schema.reminders.id, reminder.id));
+
+      throw new BadRequestException('Failed to send reminder email: ' + emailError.message);
+    }
   }
 
   /**

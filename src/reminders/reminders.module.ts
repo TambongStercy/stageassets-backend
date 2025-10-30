@@ -2,9 +2,10 @@ import { Module } from '@nestjs/common';
 import { RemindersService } from './reminders.service';
 import { RemindersController } from './reminders.controller';
 import { DatabaseModule } from '../db/database.module';
+import { EmailsModule } from '../emails/emails.module';
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, EmailsModule],
   controllers: [RemindersController],
   providers: [RemindersService],
   exports: [RemindersService],

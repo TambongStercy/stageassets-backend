@@ -73,6 +73,16 @@ export class EventsController {
     return this.eventsService.getEventStats(req.user.id, id);
   }
 
+  @Get(':id/submissions')
+  async getSubmissions(@Request() req, @Param('id', ParseIntPipe) id: number) {
+    return this.eventsService.getEventSubmissions(req.user.id, id);
+  }
+
+  @Get(':id/download-assets')
+  async downloadAssets(@Request() req, @Param('id', ParseIntPipe) id: number) {
+    return this.eventsService.downloadAllAssets(req.user.id, id);
+  }
+
   @Put(':id')
   @UseInterceptors(
     FileInterceptor('logo', {
