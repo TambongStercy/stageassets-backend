@@ -468,6 +468,9 @@ export class EventsService {
       .join('_')
       .replace(/[^a-zA-Z0-9_-]/g, '_');
 
+    console.log('Event name:', event.name);
+    console.log('Formatted filename:', `${eventFileName}_Assets.zip`);
+
     // Return as StreamableFile
     return new StreamableFile(passThrough, {
       type: 'application/zip',

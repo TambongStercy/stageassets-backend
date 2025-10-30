@@ -41,6 +41,9 @@ export class EmailsService {
       <p><strong>Deadline:</strong> ${eventDeadline.toLocaleDateString()}</p>
       <p>Please use the link below to access your personal submission portal:</p>
       <p><a href="${portalUrl}" style="background-color: #3B82F6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Submit Your Assets</a></p>
+      <p style="margin-top: 20px; padding: 12px; background-color: #F0F9FF; border-left: 4px solid #3B82F6;">
+        <strong>Note:</strong> This link is valid until the submission deadline and won't expire before then. You can access it anytime to submit or update your assets.
+      </p>
       <p>If you have any questions, please contact the event organizer.</p>
       <p>Best regards,<br>The StageAsset Team</p>
     `;
@@ -62,6 +65,9 @@ export class EmailsService {
       <p><strong>Deadline:</strong> ${eventDeadline.toLocaleDateString()}</p>
       <p>Access your submission portal here:</p>
       <p><a href="${portalUrl}" style="background-color: #3B82F6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Submit Your Assets</a></p>
+      <p style="margin-top: 20px; padding: 12px; background-color: #F0F9FF; border-left: 4px solid #3B82F6;">
+        <strong>Note:</strong> This link is valid until the submission deadline and won't expire before then. You can access it anytime to submit or update your assets.
+      </p>
       <p>Don't miss the deadline!</p>
       <p>Best regards,<br>The StageAsset Team</p>
     `;

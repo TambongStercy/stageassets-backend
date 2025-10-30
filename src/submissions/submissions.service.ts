@@ -2,6 +2,7 @@ import {
   Injectable,
   Inject,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { eq, and } from 'drizzle-orm';
@@ -17,6 +18,20 @@ export class SubmissionsService {
   ) {}
 
   async create(speakerId: number, createSubmissionDto: CreateSubmissionDto) {
+    // Get the asset requirement to validate against
+    const [assetRequirement] = await this.db
+      .select()
+      .from(schema.assetRequirements)
+      .where(eq(schema.assetRequirements.id, createSubmissionDto.assetRequirementId))
+      .limit(1);
+
+    if (!assetRequirement) {
+      throw new NotFoundException('Asset requirement not found');
+    }
+
+    // Validate the submission against requirements
+    await this.validateSubmission(createSubmissionDto, assetRequirement);
+
     // Get the latest previous submission for this speaker and asset
     const [latestPrevious] = await this.db
       .select()
@@ -73,6 +88,68 @@ export class SubmissionsService {
     await this.updateSpeakerSubmissionStatus(speakerId);
 
     return submission;
+  }
+
+  /**
+   * Validate submission against asset requirements
+   */
+  private async validateSubmission(
+    submission: CreateSubmissionDto,
+    requirement: any,
+  ) {
+    const errors: string[] = [];
+
+    // Validate file size
+    if (requirement.maxFileSizeMb) {
+      const maxSizeBytes = requirement.maxFileSizeMb * 1024 * 1024;
+      if (submission.fileSize > maxSizeBytes) {
+        errors.push(
+          `File size exceeds maximum allowed size of ${requirement.maxFileSizeMb}MB`,
+        );
+      }
+    }
+
+    // Validate file type
+    if (requirement.acceptedFileTypes) {
+      const acceptedTypes = JSON.parse(requirement.acceptedFileTypes);
+      const fileExtension = '.' + submission.fileName.split('.').pop()?.toLowerCase();
+
+      if (!acceptedTypes.includes(fileExtension)) {
+        errors.push(
+          `File type not accepted. Allowed types: ${acceptedTypes.join(', ')}`,
+        );
+      }
+    }
+
+    // Validate image dimensions (if applicable)
+    if (submission.imageWidth && submission.imageHeight) {
+      if (requirement.minImageWidth && submission.imageWidth < requirement.minImageWidth) {
+        errors.push(
+          `Image width (${submission.imageWidth}px) is below minimum required width of ${requirement.minImageWidth}px`,
+        );
+      }
+
+      if (requirement.minImageHeight && submission.imageHeight < requirement.minImageHeight) {
+        errors.push(
+          `Image height (${submission.imageHeight}px) is below minimum required height of ${requirement.minImageHeight}px`,
+        );
+      }
+    } else if (requirement.minImageWidth || requirement.minImageHeight) {
+      // Image dimensions are required but not provided
+      if (submission.mimeType.startsWith('image/')) {
+        errors.push(
+          `Image dimensions are required. Minimum dimensions: ${requirement.minImageWidth || 0}x${requirement.minImageHeight || 0}px`,
+        );
+      }
+    }
+
+    // If there are validation errors, throw exception
+    if (errors.length > 0) {
+      throw new BadRequestException({
+        message: 'Validation failed',
+        errors,
+      });
+    }
   }
 
   /**
